@@ -21,7 +21,25 @@ app.MapGet("/me", () =>
 
 // CRUD
 // Create, Read, Update, Delete
-app.MapGet("/todos", (AppDbContext db) => db.Todos.ToArray());
+app.MapGet("/todos", (AppDbContext db, int skip = 0, int limit = 30, bool showAll = false) =>
+{
+    var total = db.Todos.Count();
+    if (showAll)
+    {
+        limit = total;
+    }
+    
+    return new
+    {
+        Todos = db.Todos.Skip(skip).Take(limit).ToArray(),
+        skip,
+        limit,
+        total
+    };
+});
+
+app.MapGet("/todos/active", (AppDbContext db) => db.Todos.Where(x => !x.Completed).ToArray());
+app.MapGet("/todos/completed", (AppDbContext db) => db.Todos.Where(x => x.Completed).ToArray());
 
 app.MapGet("/todos/{id:int}", (int id, AppDbContext db) =>
 {
@@ -34,6 +52,43 @@ app.MapGet("/todos/{id:int}", (int id, AppDbContext db) =>
     // }
     // return Results.Ok(todo);
     // eğer herhangi bir koşulda status dönersek o zaman her return ifadesinin status dönmesini istiyor
+});
+
+app.MapPost("/todos", (AppDbContext db, Todo todo) =>
+{
+    if (todo.Task == null)
+    {
+        return Results.BadRequest("ayıp ayıp");
+    }
+    
+    db.Todos.Add(todo);
+    db.SaveChanges();
+    // return todo;
+    // ilk parametre oluşturduğum veriye nasıl erişirim yani bu verinin görüntülendiği yer neresi
+    return Results.Created($"/todos/{todo.Id}", todo);
+});
+
+app.MapDelete("/todos/{id:int}", (int id, AppDbContext db) =>
+{
+    if (db.Todos.Find(id) is not Todo todo)
+    {
+        return Results.NotFound();
+    }
+    
+    db.Todos.Remove(todo);
+    db.SaveChanges();
+    return Results.NoContent();
+    
+    // var todo = db.Todos.Find(id);
+    // if (todo == null)
+    // {
+    //     return Results.NotFound();
+    // }
+    //
+    // db.Todos.Remove(todo);
+    // db.SaveChanges();
+    // return Results.NoContent();
+
 });
 
 app.Run();
