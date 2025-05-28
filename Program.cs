@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using FirstWebApp;
 using FirstWebApp.Data;
 using FirstWebApp.Models;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -77,10 +78,16 @@ app.MapPost("/todos", (AppDbContext db, Todo todo) =>
 
 app.MapDelete("/todos/{id:int}", (int id, AppDbContext db) =>
 {
+    // anti forgery 
+    // çık
+    
     if (db.Todos.Find(id) is not Todo todo)
     {
         return Results.NotFound();
     }
+    
+    // captcha ok mi?
+    // çık
     
     db.Todos.Remove(todo);
     db.SaveChanges();
@@ -97,5 +104,82 @@ app.MapDelete("/todos/{id:int}", (int id, AppDbContext db) =>
     // db.SaveChanges();
     // return Results.NoContent();
 });
+
+app.MapPut("/todos/{id:int}", (AppDbContext db, int id, Todo updatedTodo) =>
+{
+    // eğer completed gelmezse o zaman completed false olur :)
+    if (db.Todos.Find(id) is not Todo todo)
+    {
+        return Results.NotFound();
+    }
+    
+    todo.Task = updatedTodo.Task;
+    // ben completed'ı böyle güncellemiyorum
+    // todo.Completed = updatedTodo.Completed;
+
+    db.SaveChanges();
+    
+    return Results.NoContent();
+    // Task ve Completed
+    // Completed gelmezse tamamlanmış olan bir todo'yu tamamlanmadı olarak işaretlerim
+});
+
+// active = aktif/tamamlanmadı
+// completed = tamamlandı
+// mark complete = tamamlandı olarak işaretle
+// app.MapPut("/todos/{id:int}/completed", (int id, AppDbContext db) =>
+// {
+//     // no content
+//     // todo'yu bulamama ihtimalimiz var no todo
+//     if (db.Todos.Find(id) is Todo todo)
+//     {
+//         todo.Completed = true;
+//         db.SaveChanges();
+//         return Results.NoContent();
+//     }
+//     
+//     return Results.NotFound();
+// });
+
+// app.MapPut("/todos/{id:int}/active", (int id, AppDbContext db) =>
+// {
+//     // no content
+//     // todo'yu bulamama ihtimalimiz var no todo
+//     if (db.Todos.Find(id) is Todo todo)
+//     {
+//         todo.Completed = false;
+//         db.SaveChanges();
+//         return Results.NoContent();
+//     }
+//     
+//     return Results.NotFound();
+// });
+
+// get, put, patch
+app.MapPut("/todos/{id:int}/{status:required}", (int id, string status, AppDbContext db) =>
+{
+    if (db.Todos.Find(id) is not Todo todo)
+    {
+        return Results.NotFound();
+    }
+
+    switch (status)
+    {
+        case "active":
+            todo.Completed = false;
+        break;
+        case "completed":
+            todo.Completed = true;
+            break;
+        default:
+            return Results.BadRequest();
+    }
+
+    db.SaveChanges();
+    return Results.NoContent();
+});
+
+// kalabalık ekip ile çalışmak için
+// event driven architecture
 
 app.Run();
