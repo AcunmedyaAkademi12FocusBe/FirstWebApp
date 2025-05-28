@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using FirstWebApp;
 using FirstWebApp.Data;
 using FirstWebApp.Models;
 using Microsoft.EntityFrameworkCore;
@@ -56,9 +58,14 @@ app.MapGet("/todos/{id:int}", (int id, AppDbContext db) =>
 
 app.MapPost("/todos", (AppDbContext db, Todo todo) =>
 {
-    if (todo.Task == null)
+    
+    // var validationContext = new ValidationContext(todo);
+    // var validationResults = new List<ValidationResult>();
+    // Validator.TryValidateObject(todo, validationContext, validationResults, true);
+    
+    if (!ValidationHelper.ValidateModel(todo, out var validationResults))
     {
-        return Results.BadRequest("ayıp ayıp");
+        return Results.BadRequest(validationResults);
     }
     
     db.Todos.Add(todo);
@@ -79,6 +86,7 @@ app.MapDelete("/todos/{id:int}", (int id, AppDbContext db) =>
     db.SaveChanges();
     return Results.NoContent();
     
+    // veya eski usül
     // var todo = db.Todos.Find(id);
     // if (todo == null)
     // {
@@ -88,7 +96,6 @@ app.MapDelete("/todos/{id:int}", (int id, AppDbContext db) =>
     // db.Todos.Remove(todo);
     // db.SaveChanges();
     // return Results.NoContent();
-
 });
 
 app.Run();
