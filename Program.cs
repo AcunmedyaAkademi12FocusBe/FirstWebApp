@@ -24,7 +24,13 @@ app.MapGet("/me", () =>
 
 // CRUD
 // Create, Read, Update, Delete
-app.MapGet("/todos", (AppDbContext db, int skip = 0, int limit = 30, bool showAll = false) =>
+
+var todos = app.MapGroup("/todos");
+// prefix = önüne ek
+// suffix = sonuna ek
+
+// tüm todoları okuma
+todos.MapGet("/", (AppDbContext db, int skip = 0, int limit = 30, bool showAll = false) =>
 {
     var total = db.Todos.Count();
     if (showAll)
@@ -34,17 +40,22 @@ app.MapGet("/todos", (AppDbContext db, int skip = 0, int limit = 30, bool showAl
     
     return new
     {
-        Todos = db.Todos.Skip(skip).Take(limit).ToArray(),
+        Todos = db.Todos.Skip(skip).Take(limit)
+            .Include(u => u.User)
+            .Select(t => new TodoDto(t))
+            .ToArray(),
         skip,
         limit,
         total
     };
 });
 
-app.MapGet("/todos/active", (AppDbContext db) => db.Todos.Where(x => !x.Completed).ToArray());
-app.MapGet("/todos/completed", (AppDbContext db) => db.Todos.Where(x => x.Completed).ToArray());
+// tüm todolar üzerinde filtreleme örnekleri
+todos.MapGet("/active", (AppDbContext db) => db.Todos.Where(x => !x.Completed).ToArray());
+todos.MapGet("/completed", (AppDbContext db) => db.Todos.Where(x => x.Completed).ToArray());
 
-app.MapGet("/todos/{id:int}", (int id, AppDbContext db) =>
+// tek bir todo gösterme
+todos.MapGet("/{id:int}", (int id, AppDbContext db) =>
 {
     return db.Todos.Find(id) is Todo todo ? Results.Ok(todo) : Results.NotFound();
     
@@ -57,9 +68,9 @@ app.MapGet("/todos/{id:int}", (int id, AppDbContext db) =>
     // eğer herhangi bir koşulda status dönersek o zaman her return ifadesinin status dönmesini istiyor
 });
 
-app.MapPost("/todos", (AppDbContext db, Todo todo) =>
+// yeni ekleme
+todos.MapPost("/", (AppDbContext db, Todo todo) =>
 {
-    
     // var validationContext = new ValidationContext(todo);
     // var validationResults = new List<ValidationResult>();
     // Validator.TryValidateObject(todo, validationContext, validationResults, true);
@@ -73,10 +84,11 @@ app.MapPost("/todos", (AppDbContext db, Todo todo) =>
     db.SaveChanges();
     // return todo;
     // ilk parametre oluşturduğum veriye nasıl erişirim yani bu verinin görüntülendiği yer neresi
-    return Results.Created($"/todos/{todo.Id}", todo);
+    return Results.Created($"/{nameof(todos)}/{todo.Id}", todo);
 });
 
-app.MapDelete("/todos/{id:int}", (int id, AppDbContext db) =>
+// silme
+todos.MapDelete("/{id:int}", (int id, AppDbContext db) =>
 {
     // anti forgery 
     // çık
@@ -105,7 +117,8 @@ app.MapDelete("/todos/{id:int}", (int id, AppDbContext db) =>
     // return Results.NoContent();
 });
 
-app.MapPut("/todos/{id:int}", (AppDbContext db, int id, Todo updatedTodo) =>
+// güncelleme
+todos.MapPut("/{id:int}", (AppDbContext db, int id, Todo updatedTodo) =>
 {
     // eğer completed gelmezse o zaman completed false olur :)
     if (db.Todos.Find(id) is not Todo todo)
@@ -127,7 +140,7 @@ app.MapPut("/todos/{id:int}", (AppDbContext db, int id, Todo updatedTodo) =>
 // active = aktif/tamamlanmadı
 // completed = tamamlandı
 // mark complete = tamamlandı olarak işaretle
-// app.MapPut("/todos/{id:int}/completed", (int id, AppDbContext db) =>
+// todos.MapPut("/{id:int}/completed", (int id, AppDbContext db) =>
 // {
 //     // no content
 //     // todo'yu bulamama ihtimalimiz var no todo
@@ -141,7 +154,7 @@ app.MapPut("/todos/{id:int}", (AppDbContext db, int id, Todo updatedTodo) =>
 //     return Results.NotFound();
 // });
 
-// app.MapPut("/todos/{id:int}/active", (int id, AppDbContext db) =>
+// todos.MapPut("/{id:int}/active", (int id, AppDbContext db) =>
 // {
 //     // no content
 //     // todo'yu bulamama ihtimalimiz var no todo
@@ -156,13 +169,15 @@ app.MapPut("/todos/{id:int}", (AppDbContext db, int id, Todo updatedTodo) =>
 // });
 
 // get, put, patch
-app.MapPut("/todos/{id:int}/{status:required}", (int id, string status, AppDbContext db) =>
+
+todos.MapPut("/{id:int}/{status:required}", (int id, string status, AppDbContext db) =>
 {
     if (db.Todos.Find(id) is not Todo todo)
     {
         return Results.NotFound();
     }
 
+    // pattern matching kullanamadık 🥲
     switch (status)
     {
         case "active":
@@ -179,7 +194,10 @@ app.MapPut("/todos/{id:int}/{status:required}", (int id, string status, AppDbCon
     return Results.NoContent();
 });
 
-// kalabalık ekip ile çalışmak için
-// event driven architecture
+var users = app.MapGroup("/users");
+users.MapPost("/", (AppDbContext db, User user) =>
+{
+    
+});
 
 app.Run();
