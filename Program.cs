@@ -93,7 +93,17 @@ todos.MapPost("/", (AppDbContext db, TodoCreateDto newTodo) =>
     {
         return Results.BadRequest(validationResults);
     }
+    
+    // user ı kontrol etmezsem 500 hatası alabiliyorum
+    // neden? çünkü o id'ye ait bir user olmayabilir
+    // bu yüzden user'ı arayıp buluyorum.
+    var user = db.Users.Find(newTodo.UserId);
+    if (user == null)
+    {
+        return Results.NotFound("User not found.");
+    }
 
+    // user'ı bulup contexte aldığım için de. artık todo'ya ekstra include etmeme gerek kalmıyor.
     var todo = newTodo.Adapt<Todo>();
     db.Todos.Add(todo);
     // veya
@@ -108,7 +118,7 @@ todos.MapPost("/", (AppDbContext db, TodoCreateDto newTodo) =>
     db.SaveChanges();
     // return todo;
     // ilk parametre oluşturduğum veriye nasıl erişirim yani bu verinin görüntülendiği yer neresi
-    return Results.Created($"/{nameof(todos)}/{todo.Id}", todo.Id);
+    return Results.Created($"/{nameof(todos)}/{todo.Id}", todo.Adapt<TodoDto>());
 });
 
 // silme

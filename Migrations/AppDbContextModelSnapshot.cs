@@ -61,7 +61,7 @@ namespace FirstWebApp.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("User");
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("FirstWebApp.Models.Todo", b =>

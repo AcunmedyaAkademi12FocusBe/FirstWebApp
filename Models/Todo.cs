@@ -33,7 +33,7 @@ public class TodoCreateDto
 {
     [Required]
     public string Task { get; set; }
-    [Required]
+    [Required, Range(1, int.MaxValue)]
     public int UserId { get; set; }
 }
 
