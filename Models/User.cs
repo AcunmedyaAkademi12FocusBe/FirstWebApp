@@ -14,5 +14,5 @@ public class UserDto
     
     // boş obje açabilmek için de bunu ekleyebiliriz
     public UserDto() { }
-    public UserDto(User user) => (Id, Name) = (user.Id, user.Name);
+    // public UserDto(User user) => (Id, Name) = (user.Id, user.Name);
 }

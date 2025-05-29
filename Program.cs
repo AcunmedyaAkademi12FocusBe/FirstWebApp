@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using AutoMapper;
 using FirstWebApp;
 using FirstWebApp.Data;
 using FirstWebApp.Models;
+using Mapster;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +12,13 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 {
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
+
+// var configuration = new MapperConfiguration(cfg => 
+// {
+//     cfg.CreateMap<Todo, TodoDto>();
+//     cfg.CreateMap<User, UserDto>();
+// });
+
 var app = builder.Build();
 
 // minimal api
@@ -38,12 +47,17 @@ todos.MapGet("/", (AppDbContext db, int skip = 0, int limit = 30, bool showAll =
         limit = total;
     }
     
+    // var mapper = configuration.CreateMapper();
+    var todos = db.Todos.Skip(skip).Take(limit).Include(u => u.User).ToArray();
+    // db.Todos.Skip(skip).Take(limit)
+    // .Include(u => u.User)
+    // .Select(t => new TodoDto(t))
+    // .ToArray()
+    
     return new
     {
-        Todos = db.Todos.Skip(skip).Take(limit)
-            .Include(u => u.User)
-            .Select(t => new TodoDto(t))
-            .ToArray(),
+        // dotnet add package Mapster
+        Todos = todos.Adapt<TodoDto[]>(),
         skip,
         limit,
         total
@@ -69,22 +83,32 @@ todos.MapGet("/{id:int}", (int id, AppDbContext db) =>
 });
 
 // yeni ekleme
-todos.MapPost("/", (AppDbContext db, Todo todo) =>
+todos.MapPost("/", (AppDbContext db, TodoCreateDto newTodo) =>
 {
     // var validationContext = new ValidationContext(todo);
     // var validationResults = new List<ValidationResult>();
     // Validator.TryValidateObject(todo, validationContext, validationResults, true);
     
-    if (!ValidationHelper.ValidateModel(todo, out var validationResults))
+    if (!ValidationHelper.ValidateModel(newTodo, out var validationResults))
     {
         return Results.BadRequest(validationResults);
     }
-    
+
+    var todo = newTodo.Adapt<Todo>();
     db.Todos.Add(todo);
+    // veya
+    // var todo = new Todo
+    // {
+    //     Task = newTodo.Task,
+    //     UserId = newTodo.UserId
+    // };
+    //
+    // db.Todos.Add(todo);
+    
     db.SaveChanges();
     // return todo;
     // ilk parametre oluşturduğum veriye nasıl erişirim yani bu verinin görüntülendiği yer neresi
-    return Results.Created($"/{nameof(todos)}/{todo.Id}", todo);
+    return Results.Created($"/{nameof(todos)}/{todo.Id}", todo.Id);
 });
 
 // silme

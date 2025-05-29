@@ -24,9 +24,17 @@ public class TodoDto
     public UserDto User { get; set; }
     public bool Completed { get; set; }
 
-    public TodoDto(Todo todo) => 
-        (Id, Task, UserId, User, Completed) = (todo.Id, todo.Task, todo.UserId, new UserDto(todo.User), todo.Completed);
-    
+    public TodoDto() { }
+    // public TodoDto(Todo todo) => 
+    //     (Id, Task, UserId, User, Completed) = (todo.Id, todo.Task, todo.UserId, new UserDto(todo.User), todo.Completed);
+}
+
+public class TodoCreateDto
+{
+    [Required]
+    public string Task { get; set; }
+    [Required]
+    public int UserId { get; set; }
 }
 
 // migration neler yaptı biliyoruz
