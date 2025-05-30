@@ -1,44 +1,29 @@
 using System.ComponentModel.DataAnnotations;
-using AutoMapper;
 using FirstWebApp;
 using FirstWebApp.Data;
 using FirstWebApp.Models;
+using FirstWebApp.Models.DTOs.Todo;
+using FirstWebApp.Models.DTOs.User;
 using Mapster;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOpenApi();
+
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
-// var configuration = new MapperConfiguration(cfg => 
-// {
-//     cfg.CreateMap<Todo, TodoDto>();
-//     cfg.CreateMap<User, UserDto>();
-// });
-
 var app = builder.Build();
 
-// minimal api
-app.MapGet("/", () => "Hello World!"); // 200
-app.MapGet("/me", () => 
-    new {
-        FirstName = "Orhan",
-        LastName = "Ekici",
-        Age = 36
-    }
-);
-
-// CRUD
-// Create, Read, Update, Delete
+app.MapOpenApi();
+app.MapScalarApiReference();
 
 var todos = app.MapGroup("/todos");
-// prefix = önüne ek
-// suffix = sonuna ek
 
-// tüm todoları okuma
 todos.MapGet("/", (AppDbContext db, int skip = 0, int limit = 30, bool showAll = false) =>
 {
     var total = db.Todos.Count();
@@ -47,17 +32,16 @@ todos.MapGet("/", (AppDbContext db, int skip = 0, int limit = 30, bool showAll =
         limit = total;
     }
     
-    // var mapper = configuration.CreateMapper();
-    var todos = db.Todos.Skip(skip).Take(limit).Include(u => u.User).ToArray();
-    // db.Todos.Skip(skip).Take(limit)
-    // .Include(u => u.User)
-    // .Select(t => new TodoDto(t))
-    // .ToArray()
+    var todos = db.Todos
+        .Skip(skip)
+        .Take(limit)
+        .Include(u => u.User)
+        .ToArray();
     
     return new
     {
         // dotnet add package Mapster
-        Todos = todos.Adapt<TodoDto[]>(),
+        Todos = todos.Adapt<TodoWithUserDto[]>(),
         skip,
         limit,
         total
@@ -68,107 +52,58 @@ todos.MapGet("/", (AppDbContext db, int skip = 0, int limit = 30, bool showAll =
 todos.MapGet("/active", (AppDbContext db) => db.Todos.Where(x => !x.Completed).ToArray());
 todos.MapGet("/completed", (AppDbContext db) => db.Todos.Where(x => x.Completed).ToArray());
 
-// tek bir todo gösterme
-todos.MapGet("/{id:int}", (int id, AppDbContext db) =>
-{
-    return db.Todos.Find(id) is Todo todo ? Results.Ok(todo) : Results.NotFound();
-    
-    // var todo = db.Todos.Find(id);
-    // if (todo == null)
-    // {
-    //     return Results.NotFound();
-    // }
-    // return Results.Ok(todo);
-    // eğer herhangi bir koşulda status dönersek o zaman her return ifadesinin status dönmesini istiyor
-});
+todos.MapGet("/{id:int}", (int id, AppDbContext db) => 
+    db.Todos.Find(id) is Todo todo ? Results.Ok(todo) : Results.NotFound());
 
-// yeni ekleme
 todos.MapPost("/", (AppDbContext db, TodoCreateDto newTodo) =>
 {
-    // var validationContext = new ValidationContext(todo);
-    // var validationResults = new List<ValidationResult>();
-    // Validator.TryValidateObject(todo, validationContext, validationResults, true);
-    
     if (!ValidationHelper.ValidateModel(newTodo, out var validationResults))
     {
         return Results.BadRequest(validationResults);
     }
     
-    // user ı kontrol etmezsem 500 hatası alabiliyorum
-    // neden? çünkü o id'ye ait bir user olmayabilir
-    // bu yüzden user'ı arayıp buluyorum.
     var user = db.Users.Find(newTodo.UserId);
     if (user == null)
     {
-        return Results.NotFound("User not found.");
+        // eğer doğrulama mesaj formatını bozmak istemiyorsak. Aşağıdaki yaklaşım güzel çalışıyor.
+        validationResults.Add(new ValidationResult("User not found.", new[] {"UserId"}));
+        return Results.NotFound(validationResults);
     }
 
     // user'ı bulup contexte aldığım için de. artık todo'ya ekstra include etmeme gerek kalmıyor.
     var todo = newTodo.Adapt<Todo>();
     db.Todos.Add(todo);
-    // veya
-    // var todo = new Todo
-    // {
-    //     Task = newTodo.Task,
-    //     UserId = newTodo.UserId
-    // };
-    //
-    // db.Todos.Add(todo);
-    
     db.SaveChanges();
-    // return todo;
-    // ilk parametre oluşturduğum veriye nasıl erişirim yani bu verinin görüntülendiği yer neresi
     return Results.Created($"/{nameof(todos)}/{todo.Id}", todo.Adapt<TodoDto>());
 });
 
-// silme
 todos.MapDelete("/{id:int}", (int id, AppDbContext db) =>
 {
-    // anti forgery 
-    // çık
-    
     if (db.Todos.Find(id) is not Todo todo)
     {
         return Results.NotFound();
     }
-    
-    // captcha ok mi?
-    // çık
-    
+
     db.Todos.Remove(todo);
     db.SaveChanges();
     return Results.NoContent();
-    
-    // veya eski usül
-    // var todo = db.Todos.Find(id);
-    // if (todo == null)
-    // {
-    //     return Results.NotFound();
-    // }
-    //
-    // db.Todos.Remove(todo);
-    // db.SaveChanges();
-    // return Results.NoContent();
 });
 
-// güncelleme
-todos.MapPut("/{id:int}", (AppDbContext db, int id, Todo updatedTodo) =>
+todos.MapPut("/{id:int}", (AppDbContext db, int id, TodoUpdateDto updatedTodo) =>
 {
-    // eğer completed gelmezse o zaman completed false olur :)
+    if (!ValidationHelper.ValidateModel(updatedTodo, out var validationResults))
+    {
+        return Results.BadRequest(validationResults);
+    }
+    
     if (db.Todos.Find(id) is not Todo todo)
     {
         return Results.NotFound();
     }
     
     todo.Task = updatedTodo.Task;
-    // ben completed'ı böyle güncellemiyorum
-    // todo.Completed = updatedTodo.Completed;
-
     db.SaveChanges();
-    
     return Results.NoContent();
-    // Task ve Completed
-    // Completed gelmezse tamamlanmış olan bir todo'yu tamamlanmadı olarak işaretlerim
 });
 
 // active = aktif/tamamlanmadı
@@ -211,7 +146,6 @@ todos.MapPut("/{id:int}/{status:required}", (int id, string status, AppDbContext
         return Results.NotFound();
     }
 
-    // pattern matching kullanamadık 🥲
     switch (status)
     {
         case "active":
@@ -229,9 +163,46 @@ todos.MapPut("/{id:int}/{status:required}", (int id, string status, AppDbContext
 });
 
 var users = app.MapGroup("/users");
-users.MapPost("/", (AppDbContext db, User user) =>
+users.MapGet("/", (AppDbContext db) => db.Users.ToArray());
+
+users.MapPost("/", (AppDbContext db, UserCreateDto newUserDto) =>
 {
+    if (!ValidationHelper.ValidateModel(newUserDto, out var validationResults))
+    {
+        return Results.BadRequest(validationResults);
+    }
     
+    var newUser = newUserDto.Adapt<User>();
+    db.Users.Add(newUser);
+    db.SaveChanges();
+    return Results.Created($"/{nameof(users)}/{newUser.Id}", newUser.Adapt<UserDto>());
 });
+
+users.MapGet("/{id:int}", (int id, AppDbContext db) => 
+    db.Users.Find(id) is User user ? Results.Ok(user.Adapt<UserDto>()) : Results.NotFound());
+
+// users.MapGet("/{id:int}/todos", (int id, AppDbContext db) => 
+//     db.Users.Where(u => u.Id == id).Include(t => t.Todos).FirstOrDefault() is User user ? 
+//         Results.Ok(user.Adapt<UserWithTodosDto>()) : Results.NotFound());
+
+users.MapGet("/{id:int}/todos", (int id, AppDbContext db) =>
+{
+    var user = db.Users.Find(id);
+    if (user == null)
+    {
+        return Results.NotFound();
+    }
+    
+    var todos = db.Todos.Where(t => t.UserId == id).ToArray();
+    return Results.Ok(todos.Adapt<TodoDto[]>());
+    // eğer user'ı da göstermek istiyorsak ama her todo'da user yazar. ona göre
+    //return Results.Ok(todos.Adapt<TodoWithUserDto[]>());
+});
+
+// db.Todos.Where(u => u.Id == id).ToArray()
+
+// todoları listeliyim ama hepsinde user bilgisi olsun
+// ilk başta user çıksın altında todos yazsın hepsi gelsin
+// ya da dümdüz ilgili user'a ait todolar gelsin
 
 app.Run();
